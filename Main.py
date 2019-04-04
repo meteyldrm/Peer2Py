@@ -7,11 +7,7 @@ import uuid
 def ini(key, value = False, path = False):
 	return Data.ini(key, value, path)
 
-class Data:
-	path = sys.path[0]
-	
-	@staticmethod
-	def unify(string, substring = "="):
+def unify(string, substring = "="):
 		if string.count(substring) == 0 or string.startswith("#"):
 			return string
 		else:
@@ -19,9 +15,10 @@ class Data:
 			string = string.replace(substring + " ", substring)
 			string = string.replace(" " + substring + " ", substring)
 			return string
-	
+
+class Data:
+	path = sys.path[0]
 	def ini(self, key, value = False, path = sys.path[0]):
-		unify = self.unify
 		if isinstance(path, bool) and not path:
 			path = os.path.join(self.path, "config.ini")
 		available = os.path.exists(path)
@@ -144,3 +141,4 @@ class Socket:
 				self.rx += self.sockets[0].recv(buffer)
 			elif self.mode == "client":
 				self.rx += self.sockets[1].recv(buffer)
+
