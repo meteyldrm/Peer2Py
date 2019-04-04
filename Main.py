@@ -19,8 +19,8 @@ def unify(string, substring = "="):
 class Data:
 	path = sys.path[0]
 	def ini(self, key, value = False, path = sys.path[0]):
-		if isinstance(path, bool) and not path:
-			path = os.path.join(self.path, "config.ini")
+		if os.path.isdir(path):
+			path = os.path.join(path, "config.ini")
 		available = os.path.exists(path)
 		if available:
 			if isinstance(value, bool) and not value:
