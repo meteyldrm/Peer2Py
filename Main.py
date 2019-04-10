@@ -3,6 +3,10 @@ import os
 import sys
 import socket
 import uuid
+import threading
+
+current_path = sys.path[0]
+quit = False
 
 def unify(string, substring = "="):
 		if string.count(substring) == 0 or string.startswith("#"):
@@ -12,8 +16,6 @@ def unify(string, substring = "="):
 			string = string.replace(substring + " ", substring)
 			string = string.replace(" " + substring + " ", substring)
 			return string
-
-current_path = sys.path[0]
 
 def ini(key, value = False, path = current_path):
 	if os.path.isdir(path): #If path is not a file
@@ -72,6 +74,13 @@ def ini(key, value = False, path = current_path):
 				return True
 			else: #Return False for a read operation
 				return False
+			
+def threaded(fn):
+    def wrapper(*args, **kwargs):
+        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
+        thread.start()
+        return thread
+    return wrapper
 
 class File:
 	def __init__(self, file, mode = "rb"):
@@ -100,31 +109,37 @@ class File:
 
 class Socket:
 	# noinspection PyMethodParameters,PyMethodParameters
-	#Update class to use init for receiving
 	class Broadcast:
-		def send(data):
-			sending = ini("broadcast_port_send")
-			receiving = ini("broadcast_port_receive")
+		def __init__(self):
+			sending_port = ini("broadcast_port_send")
+			receiving_port = ini("broadcast_port_receive")
 			broadcast_address = ini("broadcast_address")
 			
-			s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-			s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-			s.settimeout(0.2)
-			s.bind((broadcast_address, sending))
-			s.sendto(data.encode() ,(broadcast_address.encode(), receiving))
+			sending = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+			sending.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+			sending.settimeout(0.2)
+			sending.bind((broadcast_address, sending_port))
 			
-		#Rewrite
-		@staticmethod
-		def receive():
-			receiving = ini("broadcast_port_receive")
+			receiving = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+			receiving.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+			receiving.bind(("", receiving_port))
 			
-			s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-			s.bind(("", receiving))
-			while True:
-				d, addr = s.recvfrom(4096)
+			rx = []
+		
+		def send(self, data):
+			self.sending.sendto(data.encode(), (self.broadcast_address.encode(), self.receiving_port))
+			
+		#Run as daemon thread
+		@threaded
+		def receive(self):
+			isEmpty = False
+			while not isEmpty:
+				d, addr = self.receiving.recvfrom(4096)
 				data = d.decode()
-				print(data)
+				if data != "" or data is None:
+					self.rx.append(data)
+				else:
+					isEmpty = True
 	
 	class Tcp:
 		"""
@@ -169,4 +184,14 @@ class Socket:
 				self.rx += self.sockets[0].recv(buffer)
 			elif self.mode == "client":
 				self.rx += self.sockets[1].recv(buffer)
-
+				
+broadcastHandler = Socket.Broadcast()
+broadcastReceiver = broadcastHandler.receive()
+doOnce = True
+length = 0
+while not quit:
+	#Receive data
+	broadcastReceiver.join()
+	if len(broadcastHandler.rx) > length and doOnce:
+		doOnce = False
+		print(broadcastHandler.rx)
