@@ -111,20 +111,23 @@ class Socket:
 	# noinspection PyMethodParameters,PyMethodParameters
 	class Broadcast:
 		def __init__(self):
-			sending_port = ini("broadcast_port_send")
-			receiving_port = ini("broadcast_port_receive")
-			broadcast_address = ini("broadcast_address")
+			self.sending_port = int(ini("broadcast_port_send"))
+			self.receiving_port = int(ini("broadcast_port_receive"))
+			self.broadcast_address = ini("broadcast_address")
 			
-			sending = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-			sending.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-			sending.settimeout(0.2)
-			sending.bind((broadcast_address, sending_port))
+			self.sending = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+			self.sending.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+			self.sending.settimeout(0.2)
+			try:
+				self.sending.bind(("", self.sending_port))
+			except Exception as e:
+				print(e)
 			
-			receiving = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			receiving.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-			receiving.bind(("", receiving_port))
+			self.receiving = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+			self.receiving.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+			self.receiving.bind(("", self.receiving_port))
 			
-			rx = []
+			self.rx = []
 		
 		def send(self, data):
 			self.sending.sendto(data.encode(), (self.broadcast_address.encode(), self.receiving_port))
@@ -189,9 +192,18 @@ broadcastHandler = Socket.Broadcast()
 broadcastReceiver = broadcastHandler.receive()
 doOnce = True
 length = 0
+testLoop = 500000
+currentLoop = 0
 while not quit:
 	#Receive data
 	broadcastReceiver.join()
 	if len(broadcastHandler.rx) > length and doOnce:
 		doOnce = False
+		length = len(broadcastHandler.rx)
 		print(broadcastHandler.rx)
+	
+	if currentLoop == testLoop:
+		print("Loopidy loop")
+		currentLoop = 0
+		
+	currentLoop += 1
