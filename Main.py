@@ -1,3 +1,4 @@
+import psutil
 import time
 import os
 import sys
@@ -6,7 +7,7 @@ import uuid
 import threading
 
 current_path = sys.path[0]
-quit = False
+exitProgram = False
 
 def unify(string, substring = "="):
 		if string.count(substring) == 0 or string.startswith("#"):
@@ -76,18 +77,19 @@ def ini(key, value = False, path = current_path):
 				return False
 			
 def threaded(fn):
-    def wrapper(*args, **kwargs):
-        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
-        thread.start()
-        return thread
-    return wrapper
+	def wrapper(*args, **kwargs):
+		thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
+		thread.start()
+		return thread
+	return wrapper
 
 class File:
 	def __init__(self, file, mode = "rb"):
 		self.offset = 0 #Where the read head is
-		self.buffer_size = 4096 #How many bytes to skip
 		self.requested_offset = 0 #Where the read head should move to when handling a resend request
 		self.file = file
+
+		self.buffer_size = 65536 #How many bytes to skip
 		self.mode = mode
 		if not os.path.exists(file):
 			self.create(file)
@@ -119,12 +121,13 @@ class Socket:
 			self.sending.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 			self.sending.settimeout(0.2)
 			try:
-				self.sending.bind(("", self.sending_port))
+				self.sending.bind((self.broadcast_address, self.sending_port))
 			except Exception as e:
 				print(e)
 			
 			self.receiving = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.receiving.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+			self.receiving.settimeout(0.5)
 			self.receiving.bind(("", self.receiving_port))
 			
 			self.rx = []
@@ -137,13 +140,16 @@ class Socket:
 		def receive(self):
 			isEmpty = False
 			while not isEmpty:
-				d, addr = self.receiving.recvfrom(4096)
-				data = d.decode()
-				if data != "" or data is None:
-					self.rx.append(data)
-				else:
+				try:
+					d, addr = self.receiving.recvfrom(4096)
+					data = d.decode()
+					if data != "" or data is None:
+						self.rx.append(data)
+					else:
+						isEmpty = True
+				except socket.timeout:
 					isEmpty = True
-	
+
 	class Tcp:
 		"""
 		Client connects on TX, accepts connection on RX, sends data on TX
@@ -194,7 +200,7 @@ doOnce = True
 length = 0
 testLoop = 500000
 currentLoop = 0
-while not quit:
+while not exitProgram:
 	#Receive data
 	broadcastReceiver.join()
 	if len(broadcastHandler.rx) > length and doOnce:
