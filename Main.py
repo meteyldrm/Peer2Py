@@ -1,5 +1,3 @@
-import psutil
-import time
 import os
 import sys
 import socket
@@ -82,13 +80,13 @@ def threaded(fn):
 		thread.start()
 		return thread
 	return wrapper
-
+	
 class File:
+	
 	def __init__(self, file, mode = "rb"):
 		self.offset = 0 #Where the read head is
 		self.requested_offset = 0 #Where the read head should move to when handling a resend request
 		self.file = file
-
 		self.buffer_size = 65536 #How many bytes to skip
 		self.mode = mode
 		if not os.path.exists(file):
@@ -111,29 +109,38 @@ class File:
 
 class Socket:
 	# noinspection PyMethodParameters,PyMethodParameters
-	class Broadcast:
+	class Multicast:
 		def __init__(self):
-			self.sending_port = int(ini("broadcast_port_send"))
-			self.receiving_port = int(ini("broadcast_port_receive"))
-			self.broadcast_address = ini("broadcast_address")
+			#Use multicast configuration
+			self.sending_port = int(ini("multicast_port_send"))
+			self.receiving_port = int(ini("multicast_port_receive"))
+			self.multicast_address = ini("multicast_address")
 			
+			#Set up sending socket
 			self.sending = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-			self.sending.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-			self.sending.settimeout(0.2)
-			try:
-				self.sending.bind((self.broadcast_address, self.sending_port))
-			except Exception as e:
-				print(e)
+			self.sending.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
 			
+			#Set up receiving socket
 			self.receiving = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			self.receiving.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-			self.receiving.settimeout(0.5)
+			
+			#Try to make receiving address reusable
+			try:
+				self.receiving.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+			except AttributeError:
+				pass
+			
+			self.receiving.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+			self.receiving.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)
+			self.receiving.settimeout(0.1)
 			self.receiving.bind(("", self.receiving_port))
+			host = socket.gethostbyname(socket.gethostname())
+			self.receiving.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, socket.inet_aton(host))
+			self.receiving.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(self.multicast_address) + socket.inet_aton(host))
 			
 			self.rx = []
 		
 		def send(self, data):
-			self.sending.sendto(data.encode(), (self.broadcast_address.encode(), self.receiving_port))
+			self.sending.sendto(data.encode(), (self.multicast_address.encode(), self.receiving_port))
 			
 		#Run as daemon thread
 		@threaded
@@ -194,22 +201,23 @@ class Socket:
 			elif self.mode == "client":
 				self.rx += self.sockets[1].recv(buffer)
 				
-broadcastHandler = Socket.Broadcast()
-broadcastReceiver = broadcastHandler.receive()
+memoryMode = ini("memory_mode")
+multicastHandler = Socket.Multicast()
+multicastReceiver = multicastHandler.receive()
 doOnce = True
 length = 0
 testLoop = 500000
 currentLoop = 0
 while not exitProgram:
 	#Receive data
-	broadcastReceiver.join()
-	if len(broadcastHandler.rx) > length and doOnce:
+	multicastReceiver.join()
+	if len(multicastHandler.rx) > length and doOnce:
 		doOnce = False
-		length = len(broadcastHandler.rx)
-		print(broadcastHandler.rx)
+		length = len(multicastHandler.rx)
+		print(multicastHandler.rx)
 	
 	if currentLoop == testLoop:
-		print("Loopidy loop")
+		print(str(testLoop) + " loops done")
 		currentLoop = 0
 		
 	currentLoop += 1
