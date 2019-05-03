@@ -82,32 +82,34 @@ def threaded(fn):
 	return wrapper
 	
 class File:
-	
-	def __init__(self, file, mode = "rb"):
-		self.offset = 0 #Where the read head is
-		self.requested_offset = 0 #Where the read head should move to when handling a resend request
-		self.file = file
-		self.buffer_size = 65536 #How many bytes to skip
-		self.mode = mode
-		if not os.path.exists(file):
-			self.create(file)
-	
-	@staticmethod
-	def create(file):
-		open(file, "w+").close()
-	
-	def read(self):
-		with open(self.file, self.mode, self.buffer_size) as f:
-			f.seek(self.offset) #Moves the read head to where the last read operation left it
-			content = f.read(self.buffer_size) #Read bytes
-			self.offset += self.buffer_size #Update read head
-			return content
-	
-	def write(self, data):
-		with open(self.file, "ab") as f:
-			f.write(data)
+	class v1:
+		def __init__(self, file, mode = "rb"):
+			self.offset = 0 #Where the read head is
+			self.requested_offset = 0 #Where the read head should move to when handling a resend request
+			self.file = file
+			self.buffer_size = 65536 #How many bytes to skip
+			self.mode = mode
+			if not os.path.exists(file):
+				self.create(file)
+
+		@staticmethod
+		def create(file):
+			open(file, "w+").close()
+
+		def read(self):
+			with open(self.file, self.mode, self.buffer_size) as f:
+				f.seek(self.offset) #Moves the read head to where the last read operation left it
+				content = f.read(self.buffer_size) #Read bytes
+				self.offset += self.buffer_size #Update read head
+				return content
+
+		def write(self, data):
+			with open(self.file, "ab") as f:
+				f.write(data)
+
 
 class Socket:
+
 	# noinspection PyMethodParameters,PyMethodParameters
 	class Multicast:
 		def __init__(self):
@@ -200,8 +202,21 @@ class Socket:
 				self.rx += self.sockets[0].recv(buffer)
 			elif self.mode == "client":
 				self.rx += self.sockets[1].recv(buffer)
-				
-memoryMode = ini("memory_mode")
+
+class FileHandler(File.v1):
+	def __init__(self, file_dir, mode):
+		super()
+		super().__init__(file_dir,mode)
+		self.hash_buffer = []
+
+class Share:
+	def __init__(self):
+		self.file_handlers = {}
+
+	def share(self):
+		pass
+
+
 multicastHandler = Socket.Multicast()
 multicastReceiver = multicastHandler.receive()
 doOnce = True
@@ -210,7 +225,7 @@ testLoop = 500000
 currentLoop = 0
 while not exitProgram:
 	#Receive data
-	multicastReceiver.join()
+	#multicastReceiver.join()
 	if len(multicastHandler.rx) > length and doOnce:
 		doOnce = False
 		length = len(multicastHandler.rx)
